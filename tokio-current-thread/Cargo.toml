@@ -19,4 +19,5 @@ categories = ["concurrency", "asynchronous"]
 
 [dependencies]
 tokio-executor = { version = "0.1.2", path = "../tokio-executor" }
+tokio-trace = { version = "0.1.0", path = "../tokio-trace" }
 futures = "0.1.19"

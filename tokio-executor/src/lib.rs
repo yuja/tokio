@@ -36,6 +36,7 @@
 #![doc(html_root_url = "https://docs.rs/tokio-executor/0.1.3")]
 
 extern crate futures;
+extern crate tokio_trace;
 
 mod enter;
 mod global;

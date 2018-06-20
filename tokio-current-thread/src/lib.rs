@@ -27,6 +27,8 @@
 
 extern crate futures;
 extern crate tokio_executor;
+#[macro_use]
+extern crate tokio_trace;
 
 mod scheduler;
 
@@ -236,7 +238,7 @@ pub fn spawn<F>(future: F)
 where F: Future<Item = (), Error = ()> + 'static
 {
     TaskExecutor::current()
-        .spawn_local(Box::new(future))
+        .spawn_local(task(future))
         .unwrap();
 }
 
@@ -292,7 +294,7 @@ impl<P: Park> CurrentThread<P> {
     pub fn spawn<F>(&mut self, future: F) -> &mut Self
     where F: Future<Item = (), Error = ()> + 'static,
     {
-        self.borrow().spawn_local(Box::new(future), false);
+        self.borrow().spawn_local(task(future), false);
         self
     }
 
@@ -427,7 +429,7 @@ impl<'a, P: Park> Entered<'a, P> {
     pub fn spawn<F>(&mut self, future: F) -> &mut Self
     where F: Future<Item = (), Error = ()> + 'static,
     {
-        self.executor.borrow().spawn_local(Box::new(future), false);
+        self.executor.borrow().spawn_local(task(future), false);
         self
     }
 
@@ -564,23 +566,26 @@ impl<'a, P: Park> Entered<'a, P> {
         // Spawn any futures that were spawned from other threads by manually
         // looping over the receiver stream
 
-        // FIXME: Slightly ugly but needed to make the borrow checker happy
-        let (mut borrow, spawn_receiver) = (
-            Borrow {
-                scheduler: &mut self.executor.scheduler,
-                num_futures: &*self.executor.num_futures,
-            },
-            &mut self.executor.spawn_receiver,
-        );
+        let mut span = span!("tick", scheduled_futures = self.executor.num_futures.load(atomic::Ordering::SeqCst));
+        span.enter(|| {
+            // FIXME: Slightly ugly but needed to make the borrow checker happy
+            let (mut borrow, spawn_receiver) = (
+                Borrow {
+                    scheduler: &mut self.executor.scheduler,
+                    num_futures: &*self.executor.num_futures,
+                },
+                &mut self.executor.spawn_receiver,
+            );
 
-        while let Ok(future) = spawn_receiver.try_recv() {
-            borrow.spawn_local(future, true);
-        }
+            while let Ok(future) = spawn_receiver.try_recv() {
+                borrow.spawn_local(future, true);
+            }
 
-        // After any pending futures were scheduled, do the actual tick
-        borrow.scheduler.tick(
-            &mut *self.enter,
-            borrow.num_futures)
+            // After any pending futures were scheduled, do the actual tick
+            borrow.scheduler.tick(
+                &mut *self.enter,
+                borrow.num_futures)
+        })
     }
 }
 
@@ -591,6 +596,33 @@ impl<'a, P: Park> fmt::Debug for Entered<'a, P> {
             .field("enter", &self.enter)
             .finish()
     }
+}
+
+fn task<T>(f: T) -> Box<Future<Item = (), Error = ()>>
+where T: Future<Item = (), Error = ()> + 'static,
+{
+    struct Instrument<T> {
+        f: T,
+        span: Option<tokio_trace::Span>,
+    }
+
+    impl<T: Future> Future for Instrument<T> {
+        type Item = T::Item;
+        type Error = T::Error;
+
+        fn poll(&mut self) -> futures::Poll<T::Item, T::Error> {
+            let f = &mut self.f;
+            let span = self.span
+                .get_or_insert_with(|| span!("task"));
+
+            span.enter(|| f.poll())
+        }
+    }
+
+    Box::new(Instrument {
+        f,
+        span: None,
+    })
 }
 
 // ===== impl Handle =====
