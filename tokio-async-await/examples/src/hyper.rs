@@ -7,6 +7,7 @@ extern crate hyper;
 use tokio::prelude::*;
 use hyper::Client;
 
+use std::str;
 use std::time::Duration;
 
 pub fn main() {
@@ -21,5 +22,12 @@ pub fn main() {
         }).unwrap();
 
         println!("Response: {}", response.status());
+
+        let mut body = response.into_body();
+
+        while let Some(chunk) = await!(body.next()) {
+            let chunk = chunk.unwrap();
+            println!("chunk = {}", str::from_utf8(&chunk[..]).unwrap());
+        }
     });
 }

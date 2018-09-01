@@ -10,6 +10,8 @@ version = "0.1.1"
 authors = ["Carl Lerche <me@carllerche.com>"]
 license = "MIT"
 
+[workspace]
+
 [[bin]]
 name = "hyper"
 path = "src/hyper.rs"
@@ -17,7 +19,10 @@ path = "src/hyper.rs"
 [dependencies]
 tokio-async-await = { version = "0.1.0", path = "../" }
 bytes = "0.4.9"
-hyper = "0.12.8"
+hyper = "0.12.9"
+
+# Work around for nightly churn
+pin-utils = "= 0.1.0-alpha.1"
 
 [patch.crates-io]
 tokio = { path = "../.." }
@@ -26,3 +31,9 @@ tokio-io = { path = "../../tokio-io" }
 tokio-reactor = { path = "../../tokio-reactor" }
 tokio-tcp = { path = "../../tokio-tcp" }
 tokio-timer = { path = "../../tokio-timer" }
+
+# Until rust-lang-nursery/futures-rs#1239 lands
+futures = { git = "https://github.com/carllerche/futures-rs", branch = "unpin-impl", features = [ "nightly" ] }
+
+# Until `rust-lang/rust#53874` lands...
+hyper = { git = "https://github.com/carllerche/hyper", branch = "unpin" }
