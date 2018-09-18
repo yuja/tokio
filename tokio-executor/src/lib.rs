@@ -105,7 +105,7 @@ use std::fmt;
 ///
 /// [`spawn`]: #tymethod.spawn
 /// [`poll`]: https://docs.rs/futures/0.1/futures/future/trait.Future.html#tymethod.poll
-pub trait Executor {
+pub trait Executor<T = Box<Future<Item = (), Error = ()> + Send>> {
     /// Spawns a future object to run on this executor.
     ///
     /// `future` is passed to the executor, which will begin running it. The
@@ -133,8 +133,7 @@ pub trait Executor {
     /// # }
     /// # fn main() {}
     /// ```
-    fn spawn(&mut self, future: Box<Future<Item = (), Error = ()> + Send>)
-             -> Result<(), SpawnError>;
+    fn spawn(&mut self, future: T) -> Result<(), SpawnError>;
 
     /// Provides a best effort **hint** to whether or not `spawn` will succeed.
     ///
